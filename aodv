@@ -1,73 +1,78 @@
-# Simulation Parameters
-Mac/802_11 set dataRate_ 11Mb
-set val(chan) Channel/WirelessChannel
-set val(prop) Propagation/TwoRayGround
-set val(ant) Antenna/OmniAntenna
-set val(ll) LL
-set val(ifq) Queue/DropTail/PriQueue
-set val(ifqlen) 50
-set val(netif) Phy/WirelessPhy
-set val(mac) Mac/802_11
-set val(nn) 50
-set val(rp) AODV
-set val(x) 1000
-set val(y) 1000
+# Cấu hình mô phỏng
+set val(chan) Channel/WirelessChannel    ;# Loại kênh truyền
+set val(prop) Propagation/TwoRayGround   ;# Mô hình truyền sóng
+set val(ant) Antenna/OmniAntenna         ;# Loại ăng-ten
+set val(ll) LL                           ;# Loại lớp liên kết
+set val(ifq) Queue/DropTail/PriQueue     ;# Loại hàng đợi
+set val(ifqlen) 50                       ;# Kích thước tối đa của hàng đợi
+set val(netif) Phy/WirelessPhy          ;# Loại giao diện mạng
+set val(mac) Mac/802_11                 ;# Loại giao thức MAC
+set val(nn) 50                          ;# Số lượng nút
+set val(rp) AODV                        ;# Giao thức định tuyến
+set val(x) 10000
+set val(y) 10000
+set ns [new Simulator]                  ;# Khởi tạo bộ mô phỏng
 
-set ns [new Simulator]
-
-# Output files
+# Mở tệp trace và tệp NAM
 set tracefd [open aodv50.tr w]
 set namtrace [open aodv50.nam w]
-
+$ns use-newtrace
 $ns trace-all $tracefd
 $ns namtrace-all-wireless $namtrace $val(x) $val(y)
 
-# Topology configuration
+# Tạo bản đồ mạng
 set topo [new Topography]
 $topo load_flatgrid $val(x) $val(y)
-
 create-god $val(nn)
+
+# Khởi tạo kênh
 set chan_1 [new $val(chan)]
 
-# Node configuration
+# Cấu hình nút
 $ns node-config -adhocRouting $val(rp) \
-    -llType $val(ll) \
-    -macType $val(mac) \
-    -ifqType $val(ifq) \
-    -ifqLen $val(ifqlen) \
-    -antType $val(ant) \
-    -propType $val(prop) \
-    -phyType $val(netif) \
-    -topoInstance $topo \
-    -agentTrace OFF \
-    -routerTrace ON \
-    -macTrace ON \
-    -channel $chan_1
+-llType $val(ll) \
+-macType $val(mac) \
+-ifqType $val(ifq) \
+-ifqLen $val(ifqlen) \
+-antType $val(ant) \
+-propType $val(prop) \
+-phyType $val(netif) \
+-topoInstance $topo \
+-agentTrace OFF \
+-routerTrace ON \
+-macTrace ON \
+-movementTrace OFF \
+-channel $chan_1
 
-# Create nodes
+# Hàm kết thúc mô phỏng
+proc finish {} {
+    global ns tracefd namtrace
+    $ns flush-trace
+    close $tracefd
+    close $namtrace
+    exec nam -r 5m aodv50.nam &   ;# Mở NAM
+    exit 0
+}
+
+# Hàm ghi nhận kết quả
+proc record {} {
+    global ns sink9 f0 f1
+    set time 0.05
+    set bw0 [$sink9 set npkts_]
+    set bw1 [$sink9 set nlost_]
+    set now [$ns now]
+    puts $f0 "$now [expr $bw0]"
+    puts $f1 "$now [expr $bw1]"
+    $ns at [expr $now + $time] "record"
+}
+
+# Tạo nút di động và cấu hình chuyển động
 for {set i 0} {$i < $val(nn)} {incr i} {
     set n_($i) [$ns node]
-    $n_($i) random-motion 0
+    $n_($i) setdest [expr $i % 7 * 1040 + 20] [expr $i % 3 * 3000 + 20] 10.0
 }
 
-# Arrange nodes in a grid
-set grid_size 100
-for {set i 0} {$i < $val(nn)} {incr i} {
-    set row [expr $i / 10]
-    set col [expr $i % 10]
-    set x [expr $col * $grid_size + 50]
-    set y [expr $row * $grid_size + 50]
-    $n_($i) set X_ $x
-    $n_($i) set Y_ $y
-    $n_($i) set Z_ 0.0
-}
-
-# Mobility configuration
-for {set i 0} {$i < $val(nn)} {incr i} {
-    setdest [$n_($i)] [expr ($i + 1) * 50 % $val(x)] [expr ($i + 1) * 30 % $val(y)] 10.0
-}
-
-# Attach Traffic
+# Cấu hình lưu lượng CBR và kết nối TCP
 proc attach-CBR-traffic {node sink size interval} {
     set ns [Simulator instance]
     set cbr [new Agent/CBR]
@@ -78,26 +83,13 @@ proc attach-CBR-traffic {node sink size interval} {
     return $cbr
 }
 
-set sink_([expr $val(nn) - 1]) [new Agent/LossMonitor]
-$ns attach-agent $n_([expr $val(nn) - 1]) $sink_([expr $val(nn) - 1])
-
-set cbr0 [attach-CBR-traffic $n_(0) $sink_([expr $val(nn) - 1]) 512 0.25]
-
-# Finish procedure
-proc finish {} {
-    global ns tracefd namtrace
-    $ns flush-trace
-    close $tracefd
-    close $namtrace
-    exec nam aodv50.nam &
-    exit 0
-}
-
-# Schedule events
+# Tạo lưu lượng CBR giữa các nút
+set cbr0 [attach-CBR-traffic $n_(0) $sink_([expr $val(nn)-1]) 512 0.25]
+set cbr1 [attach-CBR-traffic $n_(3) $sink_([expr $val(nn)-2]) 512 0.25]
 $ns at 0.0 "$cbr0 start"
 $ns at 30.0 "$cbr0 stop"
 $ns at 30.0 "finish"
 
-# Run simulation
-puts "Starting simulation..."
+# Chạy mô phỏng
+puts "Start of simulation.."
 $ns run
