@@ -1,48 +1,152 @@
-# Cấu hình mô phỏng
-set val(chan) Channel/WirelessChannel    ;# Loại kênh truyền
-set val(prop) Propagation/TwoRayGround   ;# Mô hình truyền sóng
-set val(ant) Antenna/OmniAntenna         ;# Loại ăng-ten
-set val(ll) LL                           ;# Loại lớp liên kết
-set val(ifq) Queue/DropTail/PriQueue     ;# Loại hàng đợi
-set val(ifqlen) 50                       ;# Kích thước tối đa của hàng đợi
-set val(netif) Phy/WirelessPhy          ;# Loại giao diện mạng
-set val(mac) Mac/802_11                 ;# Loại giao thức MAC
-set val(nn) 50                          ;# Số lượng nút
-set val(rp) AODV                        ;# Giao thức định tuyến
-set val(x) 10000
-set val(y) 10000
-set ns [new Simulator]                  ;# Khởi tạo bộ mô phỏng
+# AODV Routing Protocol Simulation
+# Mô phỏng mạng MANET với tham số tối ưu
 
-# Mở tệp trace và tệp NAM
-set tracefd [open aodv50.tr w]
-set namtrace [open aodv50.nam w]
+# Cấu hình mạng không dây
+set val(chan)   Channel/WirelessChannel    ;# Loại kênh
+set val(prop)   Propagation/TwoRayGround   ;# Mô hình lan truyền
+set val(ant)    Antenna/OmniAntenna        ;# Loại anten
+set val(ll)     LL                         ;# Lớp liên kết
+set val(ifq)    Queue/DropTail/PriQueue    ;# Loại hàng đợi
+set val(ifqlen) 100                        ;# Tăng độ dài hàng đợi
+set val(netif)  Phy/WirelessPhy           ;# Loại giao diện mạng
+set val(mac)    Mac/802_11                ;# Loại MAC
+set val(rp)     AODV                      ;# Giao thức định tuyến
+set val(nn)     100                       ;# Số lượng nút
+set val(x)      500                       ;# Chiều rộng địa hình
+set val(y)      500                       ;# Chiều cao địa hình
+set val(stop)   150                       ;# Thời gian mô phỏng
+
+# Tạo đối tượng Simulator
+set ns [new Simulator]
+
+# Thiết lập truy vết
+set tracefd [open aodv_optimized.tr w]
+set namtrace [open aodv_optimized.nam w]
+
 $ns use-newtrace
 $ns trace-all $tracefd
 $ns namtrace-all-wireless $namtrace $val(x) $val(y)
 
-# Tạo bản đồ mạng
+# Tạo địa hình
 set topo [new Topography]
 $topo load_flatgrid $val(x) $val(y)
+
+# Tạo God
 create-god $val(nn)
 
-# Khởi tạo kênh
-set chan_1 [new $val(chan)]
+# Cấu hình tham số vật lý không dây
+Phy/WirelessPhy set RXThresh_ 1.0e-10    ;# Ngưỡng nhận
+Phy/WirelessPhy set CSThresh_ 1.0e-11    ;# Ngưỡng cảm nhận sóng mang
+Phy/WirelessPhy set Pt_ 0.2818           ;# Công suất phát
+Phy/WirelessPhy set freq_ 914e+6         ;# Tần số
+Phy/WirelessPhy set L_ 1.0               ;# Hệ số suy hao
+Phy/WirelessPhy set Gt_ 1.0              ;# Hệ số khuếch đại phát
+Phy/WirelessPhy set Gr_ 1.0              ;# Hệ số khuếch đại thu
 
-# Cấu hình nút
+# Tạo và cấu hình kênh không dây
+set chan [new $val(chan)]
+
+# Cấu hình năng lượng
+set val(energymodel)    EnergyModel     
+set val(initialenergy)  100              ;# Năng lượng ban đầu (Joules)
+
+# Cấu hình nút với các tham số tối ưu
 $ns node-config -adhocRouting $val(rp) \
--llType $val(ll) \
--macType $val(mac) \
--ifqType $val(ifq) \
--ifqLen $val(ifqlen) \
--antType $val(ant) \
--propType $val(prop) \
--phyType $val(netif) \
--topoInstance $topo \
--agentTrace OFF \
--routerTrace ON \
--macTrace ON \
--movementTrace OFF \
--channel $chan_1
+                -llType $val(ll) \
+                -macType $val(mac) \
+                -ifqType $val(ifq) \
+                -ifqLen $val(ifqlen) \
+                -antType $val(ant) \
+                -propType $val(prop) \
+                -phyType $val(netif) \
+                -channel $chan \
+                -topoInstance $topo \
+                -energyModel $val(energymodel) \
+                -initialEnergy $val(initialenergy) \
+                -rxPower 0.3 \
+                -txPower 0.6 \
+                -idlePower 0.1 \
+                -sleepPower 0.001 \
+                -agentTrace ON \
+                -routerTrace ON \
+                -macTrace OFF \
+                -movementTrace OFF
+
+# Tạo các nút
+for {set i 0} {$i < $val(nn)} {incr i} {
+    set node($i) [$ns node]
+    $node($i) random-motion 0
+}
+
+# Đặt vị trí ban đầu cho các nút theo grid với nhiễu ngẫu nhiên
+set grid_size [expr sqrt($val(nn))]
+set spacing_x [expr $val(x) / $grid_size]
+set spacing_y [expr $val(y) / $grid_size]
+
+for {set i 0} {$i < $val(nn)} {incr i} {
+    set row [expr int($i / $grid_size)]
+    set col [expr $i % $grid_size]
+    
+    # Thêm nhiễu ngẫu nhiên ±20% khoảng cách grid
+    set noise_x [expr (rand() - 0.5) * 0.4 * $spacing_x]
+    set noise_y [expr (rand() - 0.5) * 0.4 * $spacing_y]
+    
+    set x_pos [expr ($col * $spacing_x) + ($spacing_x/2) + $noise_x]
+    set y_pos [expr ($row * $spacing_y) + ($spacing_y/2) + $noise_y]
+    
+    # Đảm bảo nút nằm trong vùng mô phỏng
+    set x_pos [expr min($val(x), max(0, $x_pos))]
+    set y_pos [expr min($val(y), max(0, $y_pos))]
+    
+    $node($i) set X_ $x_pos
+    $node($i) set Y_ $y_pos
+    $node($i) set Z_ 0.0
+}
+
+# Định nghĩa mô hình di chuyển với tốc độ thực tế
+for {set i 0} {$i < $val(nn)} {incr i} {
+    set speed [expr 1 + rand() * 4]  ;# Tốc độ 1-5 m/s
+    set start_time [expr rand() * 20]  ;# Thời điểm bắt đầu di chuyển ngẫu nhiên
+    
+    # Chọn điểm đến ngẫu nhiên
+    set dest_x [expr rand() * $val(x)]
+    set dest_y [expr rand() * $val(y)]
+    
+    $ns at $start_time "$node($i) setdest $dest_x $dest_y $speed"
+}
+
+# Tạo nhiều luồng lưu lượng với các mẫu khác nhau
+set num_flows 8  ;# Số lượng luồng CBR
+
+for {set i 0} {$i < $num_flows} {incr i} {
+    # Chọn ngẫu nhiên nút nguồn và đích
+    set src [expr int(rand() * $val(nn))]
+    set dst [expr int(rand() * $val(nn))]
+    
+    # Đảm bảo nguồn và đích khác nhau
+    while {$src == $dst} {
+        set dst [expr int(rand() * $val(nn))]
+    }
+    
+    # Tạo sink
+    set sink($i) [new Agent/LossMonitor]
+    $ns attach-agent $node($dst) $sink($i)
+    
+    # Tạo nguồn CBR với các thông số tối ưu
+    set cbr($i) [new Agent/CBR]
+    $cbr($i) set packetSize_ 256
+    $cbr($i) set interval_ [expr 0.25 + (rand() * 0.5)]  ;# Khoảng thời gian 0.25-0.75s
+    $cbr($i) set random_ 1
+    $ns attach-agent $node($src) $cbr($i)
+    
+    $ns connect $cbr($i) $sink($i)
+    
+    # Lập lịch bắt đầu và kết thúc ngẫu nhiên
+    set start_time [expr 10 + rand() * 40]
+    set stop_time [expr $start_time + 60 + rand() * 40]
+    $ns at $start_time "$cbr($i) start"
+    $ns at $stop_time "$cbr($i) stop"
+}
 
 # Hàm kết thúc mô phỏng
 proc finish {} {
@@ -50,59 +154,16 @@ proc finish {} {
     $ns flush-trace
     close $tracefd
     close $namtrace
-    exec nam -r 5m aodv50.nam &   ;# Mở NAM
+    puts "Simulation completed."
     exit 0
 }
 
-# Hàm ghi nhận kết quả
-proc record {} {
-    global ns sink9 f0 f1
-    set time 0.05
-    set bw0 [$sink9 set npkts_]
-    set bw1 [$sink9 set nlost_]
-    set now [$ns now]
-    puts $f0 "$now [expr $bw0]"
-    puts $f1 "$now [expr $bw1]"
-    $ns at [expr $now + $time] "record"
-}
+# Đặt thời điểm kết thúc
+$ns at $val(stop) "finish"
 
-# Tạo nút di động và cấu hình chuyển động
-for {set i 0} {$i < $val(nn)} {incr i} {
-    set n_($i) [$ns node]
-    # Di chuyển các nút đến tọa độ xác định với tốc độ 10m/s
-    $n_($i) setdest [expr $i % 7 * 1040 + 20] [expr $i % 3 * 3000 + 20] 10.0
-}
+# Thiết lập seed cho bộ sinh số ngẫu nhiên
+ns-random 12345
 
-# Tạo các agent (CBR, TCP, LossMonitor) và kết nối chúng
-for {set i 0} {$i < $val(nn)} {incr i} {
-    # Tạo Agent TCP cho nút 0 và các nút khác
-    set tcp_($i) [new Agent/TCP]
-    $ns attach-agent $n_($i) $tcp_($i)
-
-    # Tạo Agent LossMonitor cho mỗi nút
-    set sink_($i) [new Agent/LossMonitor]
-    $ns attach-agent $n_($i) $sink_($i)
-
-    # Tạo kết nối CBR giữa các nút
-    if {$i == 0} {
-        set cbr_0 [new Agent/CBR]
-        $ns attach-agent $n_($i) $cbr_0
-        $cbr_0 set packetSize_ 512
-        $cbr_0 set interval_ 0.25
-        $ns connect $cbr_0 $sink_($val(nn)-1)
-        $ns at 0.0 "$cbr_0 start"
-        $ns at 30.0 "$cbr_0 stop"
-    }
-}
-
-# Hàm để khởi tạo lưu lượng TCP
-proc start-tcp-traffic {} {
-    global ns tcp_0 sink_0
-    $ns at 1.0 "$tcp_0 start"
-    $ns at 30.0 "$tcp_0 stop"
-    $ns at 30.0 "finish"
-}
-
-# Kết thúc và chạy mô phỏng
-puts "Start of simulation.."
+# Chạy mô phỏng
+puts "Starting optimized AODV simulation..."
 $ns run
