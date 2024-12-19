@@ -78,21 +78,26 @@ for {set i 0} {$i < $val(nn)} {incr i} {
     $node($i) random-motion 0
 }
 
-# Đặt vị trí ban đầu cho các nút theo grid với nhiễu ngẫu nhiên
-set grid_size [expr sqrt($val(nn))]
-set spacing_x [expr $val(x) / $grid_size]
-set spacing_y [expr $val(y) / $grid_size]
+# Đặt vị trí ban đầu cho các nút theo lưới với nhiễu
+set grid_size [expr int(sqrt($val(nn)))]  ;# Chuyển đổi sang số nguyên
+set spacing_x [expr $val(x) / double($grid_size)]
+set spacing_y [expr $val(y) / double($grid_size)]
 
 for {set i 0} {$i < $val(nn)} {incr i} {
     set row [expr int($i / $grid_size)]
-    set col [expr $i % $grid_size]
+    set col [expr int($i % $grid_size)]
     
-    # Thêm nhiễu ngẫu nhiên ±20% khoảng cách grid
+    # Tính vị trí cơ bản
+    set base_x [expr $col * $spacing_x]
+    set base_y [expr $row * $spacing_y]
+    
+    # Thêm nhiễu ngẫu nhiên ±20% khoảng cách
     set noise_x [expr (rand() - 0.5) * 0.4 * $spacing_x]
     set noise_y [expr (rand() - 0.5) * 0.4 * $spacing_y]
     
-    set x_pos [expr ($col * $spacing_x) + ($spacing_x/2) + $noise_x]
-    set y_pos [expr ($row * $spacing_y) + ($spacing_y/2) + $noise_y]
+    # Tính vị trí cuối cùng
+    set x_pos [expr $base_x + ($spacing_x/2.0) + $noise_x]
+    set y_pos [expr $base_y + ($spacing_y/2.0) + $noise_y]
     
     # Đảm bảo nút nằm trong vùng mô phỏng
     set x_pos [expr min($val(x), max(0, $x_pos))]
