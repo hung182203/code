@@ -79,13 +79,13 @@ for {set i 0} {$i < $val(nn)} {incr i} {
 }
 
 # Đặt vị trí ban đầu cho các nút theo lưới với nhiễu
-set grid_size [expr int(sqrt($val(nn)))]  ;# Chuyển đổi sang số nguyên
+set grid_size [expr int(sqrt($val(nn)) + 0.5)]  ;# Làm tròn căn bậc hai đến số nguyên gần nhất
 set spacing_x [expr $val(x) / double($grid_size)]
 set spacing_y [expr $val(y) / double($grid_size)]
 
 for {set i 0} {$i < $val(nn)} {incr i} {
     set row [expr int($i / $grid_size)]
-    set col [expr int($i % $grid_size)]
+    set col [expr $i % $grid_size]
     
     # Tính vị trí cơ bản
     set base_x [expr $col * $spacing_x]
