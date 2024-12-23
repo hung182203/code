@@ -19,25 +19,17 @@ set val(stop) 900                       ;# Thời gian mô phỏng kết thúc (
 set val(cp) "cbr30.tcl"                 ;# Tệp tin cấu hình tải
 set val(sc) "node30.tcl"                ;# Tệp tin cấu hình kịch bản
 
-# Khởi tạo mô phỏng
-set ns_ [new Simulator]
+set ns_[new Simulator]
+set tracefd [open traceaodv30.tr w]
 
-# Tạo và ghi vào tệp .nam (visualization)
-set namfile "simulation_output.nam"    ;# Tên tệp .nam
-$ns_ namtrace-all $namfile             ;# Tạo tệp nam và ghi vào đó
+$ns_ trace-all $tracefd # ghi lai qua trinh mo phong
 
-# Tạo tệp .tr (trace file) để ghi lại các sự kiện mô phỏng
-set tracefd [open traceaodv30.tr w]    ;# Tạo tệp traceaodv30.tr
-$ns_ trace-all $tracefd                ;# Ghi tất cả các sự kiện vào tệp trace
-
-# Tạo topography cho mạng
 set topo [new Topography]
-$topo load_flatgrid $val(x) $val(y)   ;# Tạo topo với kích thước đã chỉ định
+$topo load_flatgrid $val(x) $val(y) # tao topo
 
-# Tạo God (Global Positioning) để theo dõi các node
-set god_ [create-god $val(nn)]         ;# Tạo God cho mô phỏng
+set god_ [create-god $val(nn)] # xac dinh duong di toi uu giua cac nut trong mang
 
-# Cấu hình các node
+
 $ns_ node-config -adhocRouting $val(rp) \
                  -llType $val(ll) \
                  -macType $val(mac) \
@@ -53,25 +45,20 @@ $ns_ node-config -adhocRouting $val(rp) \
                  -macTrace ON \
                  -movementTrace ON
 
-# Tạo các node và gán chúng vào God
 for {set i 0} {$i < $val(nn)} {incr i} {
     set node_($i) [$ns_ node]
     $god_ new_node $node_($i)
 }
 
-# Nạp các tệp cấu hình tải và kịch bản
 source $val(cp)
 source $val(sc)
-
-# Đặt sự kiện để reset các node tại thời điểm mô phỏng kết thúc
 for {set i 0} {$i < $val(nn)} {incr i} {
-    $ns_ at $val(stop) "$node_($i) reset"
+    $ns_ at $val(stop) "$node_($i) reset";
 }
-
 # Đặt sự kiện để gọi thủ tục 'stop' tại thời điểm mô phỏng dừng
 $ns_ at $val(stop) "stop"
 
-# Đặt sự kiện hiển thị thông báo và dừng mô phỏng hoàn toàn
+# Đặt một sự kiện khác để hiển thị thông báo và dừng mô phỏng hoàn toàn
 $ns_ at [expr $val(stop) + 0.01] "puts \"end simulation\" ; $ns_ halt"
 
 # Định nghĩa thủ tục 'stop' để xử lý việc dừng mô phỏng và lưu trữ dữ liệu
@@ -82,4 +69,4 @@ proc stop {} {
 }
 
 # Chạy mô phỏng
-$ns_ run
+$ns_ run  
